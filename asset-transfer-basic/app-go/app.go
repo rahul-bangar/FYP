@@ -1,20 +1,24 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
 	"github.com/hyperledger/fabric-sdk-go/pkg/gateway"
-	"encoding/json"
+	"io"
 	"log"
+	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
 )
 
 // Define the Device struct type
 type Device struct {
-    ID     string `json:"id"`
-    Status string `json:"status"`
+	ID     string `json:"id"`
+	Status string `json:"status"`
 }
 
 func main() {
@@ -146,6 +150,48 @@ func main() {
 			return
 		}
 
+		url := "http://139.59.41.48:18083/api/v5/authentication/password_based%3Abuilt_in_database/users"
+		method := "POST"
+
+		payload := &bytes.Buffer{}
+		writer := multipart.NewWriter(payload)
+		// GENERATE RANDOM USERNAME AND PASSWORD HERE
+		_ = writer.WriteField("password", "kya_fayda")
+		_ = writer.WriteField("user_id", "rahul")
+		err = writer.Close()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		client := &http.Client{}
+		req, err := http.NewRequest(method, url, payload)
+
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		// PUT THIS HEADER INTO THE ENV FILE
+		req.Header.Add("Authorization", "Basic MGQyNTdhNTEwMDdlNGJmMzpJSmJOdkhOOUEwbWUwQTlBd25jcHY5QU1Qc3dDWUpHSnY4dkZUdUFvaHRIdFVN")
+
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+		res, err := client.Do(req)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		defer res.Body.Close()
+
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		if string(body) == `{"code":"ALREADY_EXISTS","message":"User already exists"}` {
+			c.JSON(200, gin.H{"message": "User already exists."})
+			return
+		}
+
 		c.JSON(200, gin.H{"message": "Device authenticated"})
 	})
 
@@ -175,7 +221,7 @@ func main() {
 			return
 		}
 		var devices []Device // Assuming Device is the struct type representing a device
-		if(result == nil){
+		if result == nil {
 			c.JSON(200, gin.H{"devices": "No devices registered"})
 			return
 		}
