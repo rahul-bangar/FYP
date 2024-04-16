@@ -4,22 +4,63 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
-	"github.com/hyperledger/fabric-sdk-go/pkg/gateway"
-	"github.com/joho/godotenv"
 	"io"
 	"log"
+	"math/rand"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
+	"github.com/hyperledger/fabric-sdk-go/pkg/gateway"
+	"github.com/joho/godotenv"
 )
 
 // Define the Device struct type
 type Device struct {
 	ID     string `json:"id"`
 	Status string `json:"status"`
+}
+type User struct {
+	Name     string `json:"user name"`
+	Password string `json:"password"`
+}
+
+type Res_body struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func usr_name() string {
+	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
+	// Create a new random number generator
+	src := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(src)
+
+	length := r.Intn(6) + 6 // Generates a random number between 6 and 10
+	b := make([]rune, length)
+	for i := range b {
+		b[i] = letters[r.Intn(len(letters))]
+	}
+	return string(b)
+}
+func pwd() string {
+	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
+	// Create a new random number generator
+	src := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(src)
+
+	length := 10 // Set the length to 10
+	b := make([]rune, length)
+	for i := range b {
+		b[i] = letters[r.Intn(len(letters))]
+	}
+	return string(b)
 }
 
 func main() {
@@ -163,8 +204,12 @@ func main() {
 		payload := &bytes.Buffer{}
 		writer := multipart.NewWriter(payload)
 		// GENERATE RANDOM USERNAME AND PASSWORD HERE
-		_ = writer.WriteField("password", "kya_fayda")
-		_ = writer.WriteField("user_id", "rahul")
+		b := usr_name()
+		x := pwd()
+		fmt.Println("username = " + string(b))
+		fmt.Println("password = " + string(x))
+		_ = writer.WriteField("password", x)
+		_ = writer.WriteField("user_id", b)
 		err = writer.Close()
 		if err != nil {
 			fmt.Println(err)
@@ -178,7 +223,7 @@ func main() {
 			fmt.Println(err)
 			return
 		}
-		// PUT THIS HEADER INTO THE ENV FILE
+
 		req.Header.Add("Authorization", Key)
 
 		req.Header.Set("Content-Type", writer.FormDataContentType())
@@ -188,18 +233,32 @@ func main() {
 			return
 		}
 		defer res.Body.Close()
-
+		
 		body, err := io.ReadAll(res.Body)
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
-		if string(body) == `{"code":"ALREADY_EXISTS","message":"User already exists"}` {
-			c.JSON(200, gin.H{"message": "User already exists."})
+		var Res Res_body
+		err = json.Unmarshal(body, &Res)
+		if err != nil {
+			fmt.Println("Error parsing JSON:", err)
+			return
+		}
+		if res.StatusCode == 409 {
+			c.JSON(409, gin.H{"error": Res.Message})
+			return
+		}
+		if res.StatusCode == 201 {
+			user := User{
+				Name:     b,
+				Password: x,
+			}
+			c.JSON(201, user)
 			return
 		}
 
-		c.JSON(200, gin.H{"message": "Device authenticated"})
+		c.JSON(res.StatusCode, gin.H{"error": "Some error occurred"})
 	})
 
 	router.POST("/delete", func(c *gin.Context) {
