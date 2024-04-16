@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
 	"github.com/hyperledger/fabric-sdk-go/pkg/gateway"
+	"github.com/joho/godotenv"
 	"io"
 	"log"
 	"mime/multipart"
@@ -135,6 +136,12 @@ func main() {
 	})
 
 	router.POST("/auth", func(c *gin.Context) {
+		// Load .env file
+		er := godotenv.Load(".env")
+		if er != nil {
+			log.Fatalf("Error loading .env file: %v", er)
+		}
+		Key := os.Getenv("KEY")
 		var requestBody struct {
 			Esp32ID string `json:"esp32id"`
 		}
@@ -150,7 +157,7 @@ func main() {
 			return
 		}
 
-		url := "http://139.59.41.48:18083/api/v5/authentication/password_based%3Abuilt_in_database/users"
+		url := "http://159.89.173.20:18083/api/v5/authentication/password_based%3Abuilt_in_database/users"
 		method := "POST"
 
 		payload := &bytes.Buffer{}
@@ -172,7 +179,7 @@ func main() {
 			return
 		}
 		// PUT THIS HEADER INTO THE ENV FILE
-		req.Header.Add("Authorization", "Basic MGQyNTdhNTEwMDdlNGJmMzpJSmJOdkhOOUEwbWUwQTlBd25jcHY5QU1Qc3dDWUpHSnY4dkZUdUFvaHRIdFVN")
+		req.Header.Add("Authorization", Key)
 
 		req.Header.Set("Content-Type", writer.FormDataContentType())
 		res, err := client.Do(req)
