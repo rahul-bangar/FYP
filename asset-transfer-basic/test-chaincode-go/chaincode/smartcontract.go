@@ -20,6 +20,10 @@ type Asset struct {
 	Status string `json:"Status"`
 	Key   string `json:"Key"`
 }
+type Device_list struct {
+	ID     string `json:"ID"`
+	Status string `json:"Status"`
+}
 
 // InitLedger adds a base set of assets to the ledger
 func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) error {
@@ -138,7 +142,7 @@ func (s *SmartContract) exists(ctx contractapi.TransactionContextInterface, id s
 }
 
 // GetAllAssets returns all assets found in world state
-func (s *SmartContract) GetAll(ctx contractapi.TransactionContextInterface) ([]*Asset, error) {
+func (s *SmartContract) GetAll(ctx contractapi.TransactionContextInterface) ([]*Device_list, error) {
 	// range query with empty string for startKey and endKey does an
 	// open-ended query of all assets in the chaincode namespace.
 	resultsIterator, err := ctx.GetStub().GetStateByRange("", "")
@@ -147,7 +151,7 @@ func (s *SmartContract) GetAll(ctx contractapi.TransactionContextInterface) ([]*
 	}
 	defer resultsIterator.Close()
 
-	var assets []*Asset
+	var devices []*Device_list
 	for resultsIterator.HasNext() {
 		queryResponse, err := resultsIterator.Next()
 		if err != nil {
@@ -159,8 +163,12 @@ func (s *SmartContract) GetAll(ctx contractapi.TransactionContextInterface) ([]*
 		if err != nil {
 			return nil, err
 		}
-		assets = append(assets, &asset)
+		device := Device_list{
+			ID: asset.ID,
+			Status: asset.Status,
+		}
+		devices = append(devices, &device)
 	}
 
-	return assets, nil
+	return devices, nil
 }
