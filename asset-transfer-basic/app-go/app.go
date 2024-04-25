@@ -26,7 +26,7 @@ import (
 type Device struct {
 	ID     string `json:"id"`
 	Status string `json:"status"`
-	Key string `json:"key"`
+	Key    string `json:"key"`
 }
 type User struct {
 	Name     string `json:"username"`
@@ -211,14 +211,17 @@ func main() {
 		}
 		fmt.Println(string(asset))
 		m := make(map[string]string)
-		var key = []byte(m["Key"])
+		err = json.Unmarshal(asset, &m)
+		var key = m["Key"]
+		fmt.Printf("Fetched Key is: %s\n", key)
+
 		encryptedBytes, err := hex.DecodeString(requestBody.Cipher)
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("%s", err)})
 			return
 		}
 
-		block, err := aes.NewCipher(key)
+		block, err := aes.NewCipher([]byte(key))
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("%s", err)})
 			return
@@ -231,6 +234,8 @@ func main() {
 		}
 		decryptedText := string(decrypted)
 
+		fmt.Printf("Decrypted: %s\n", decryptedText)
+
 		// converting json here
 
 		var data map[string]string
@@ -239,6 +244,8 @@ func main() {
 		}
 
 		// json convert end
+
+		fmt.Printf("Data: %v, ID:\n", data, data["id"])
 
 		if data["id"] != m["ID"] {
 			c.JSON(500, gin.H{"error": "Some error occurred"})
