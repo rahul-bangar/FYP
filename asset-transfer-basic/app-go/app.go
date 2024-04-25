@@ -25,7 +25,7 @@ type Device struct {
 	Status string `json:"status"`
 }
 type User struct {
-	Name     string `json:"user name"`
+	Name     string `json:"username"`
 	Password string `json:"password"`
 }
 
