@@ -212,6 +212,10 @@ func main() {
 		fmt.Println(string(asset))
 		m := make(map[string]string)
 		err = json.Unmarshal(asset, &m)
+		if err != nil {
+			c.JSON(500, gin.H{"error": fmt.Sprintf("%s", err)})
+			return
+		}
 		var key = m["Key"]
 		fmt.Printf("Fetched Key is: %s\n", key)
 
@@ -245,7 +249,7 @@ func main() {
 
 		// json convert end
 
-		fmt.Printf("Data: %v, ID:\n", data, data["id"])
+		fmt.Printf("Data: %v, ID: %s\n", data, data["id"])
 
 		if data["id"] != m["ID"] {
 			c.JSON(500, gin.H{"error": "Some error occurred"})
