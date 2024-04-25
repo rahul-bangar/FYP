@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/aes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -23,6 +26,7 @@ import (
 type Device struct {
 	ID     string `json:"id"`
 	Status string `json:"status"`
+	Key string `json:"key"`
 }
 type User struct {
 	Name     string `json:"username"`
@@ -140,14 +144,20 @@ func main() {
 		var requestBody struct {
 			Esp32ID string `json:"esp32id"`
 			Status  string `json:"Status"`
+			Key     string `json:"key"`
 		}
 		if err := c.BindJSON(&requestBody); err != nil {
 			c.JSON(400, gin.H{"error": "Invalid request body"})
 			return
 		}
 
+		if len(requestBody.Key) < 16 {
+			// Pad the Key with spaces to make it 16 characters
+			requestBody.Key = requestBody.Key + strings.Repeat(" ", 16-len(requestBody.Key))
+		}
+
 		// Submit transaction
-		_, err := contract.SubmitTransaction("Register", requestBody.Esp32ID, requestBody.Status)
+		_, err := contract.SubmitTransaction("Register", requestBody.Esp32ID, requestBody.Status, requestBody.Key)
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to submit transaction: %s", err)})
 			return
@@ -185,6 +195,7 @@ func main() {
 		Key := os.Getenv("KEY")
 		var requestBody struct {
 			Esp32ID string `json:"esp32id"`
+			Cipher  string `json:"cipher"`
 		}
 		if err := c.BindJSON(&requestBody); err != nil {
 			c.JSON(400, gin.H{"error": "Invalid request body"})
@@ -192,9 +203,45 @@ func main() {
 		}
 
 		// Submit transaction
-		_, err := contract.SubmitTransaction("Auth", requestBody.Esp32ID)
+		asset, err := contract.SubmitTransaction("Auth", requestBody.Esp32ID)
+
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("%s", err)})
+			return
+		}
+		fmt.Println(string(asset))
+		m := make(map[string]string)
+		var key = []byte(m["Key"])
+		encryptedBytes, err := hex.DecodeString(requestBody.Cipher)
+		if err != nil {
+			c.JSON(500, gin.H{"error": fmt.Sprintf("%s", err)})
+			return
+		}
+
+		block, err := aes.NewCipher(key)
+		if err != nil {
+			c.JSON(500, gin.H{"error": fmt.Sprintf("%s", err)})
+			return
+		}
+
+		// Trim any null characters used as padding
+		decrypted := make([]byte, len(encryptedBytes))
+		for bs, be := 0, block.BlockSize(); bs < len(encryptedBytes); bs, be = bs+be, be+be {
+			block.Decrypt(decrypted[bs:be], encryptedBytes[bs:be])
+		}
+		decryptedText := string(decrypted)
+
+		// converting json here
+
+		var data map[string]string
+		if err := json.Unmarshal([]byte(decryptedText), &data); err != nil {
+			return
+		}
+
+		// json convert end
+
+		if data["id"] != m["ID"] {
+			c.JSON(500, gin.H{"error": "Some error occurred"})
 			return
 		}
 
@@ -233,7 +280,7 @@ func main() {
 			return
 		}
 		defer res.Body.Close()
-		
+
 		body, err := io.ReadAll(res.Body)
 		if err != nil {
 			fmt.Println(err)
