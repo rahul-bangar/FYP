@@ -110,7 +110,7 @@ func (s *SmartContract) Auth(ctx contractapi.TransactionContextInterface, id str
 	// json convert end
 
 	if(data["id"] != asset.ID){
-		return nil, fmt.Errorf("Invalid device id")
+		return nil, fmt.Errorf("invalid device id")
 	}
 	if asset.Status != "active" {
 		return nil, fmt.Errorf("the device %s is blacklisted", id)
