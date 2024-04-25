@@ -1,6 +1,8 @@
 package chaincode
 
 import (
+	"crypto/aes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
@@ -18,12 +20,13 @@ type SmartContract struct {
 type Asset struct {
 	ID     string `json:"ID"`
 	Status string `json:"Status"`
+	Key   string `json:"Key"`
 }
 
 // InitLedger adds a base set of assets to the ledger
 func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) error {
 	assets := []Asset{
-		{ID: "D0", Status: "Admin"},
+		{ID: "D0", Status: "Admin", Key: "xyz"},
 	}
 
 	for _, asset := range assets {
@@ -41,7 +44,7 @@ func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) 
 }
 
 // Register issues a new device to the world state with given details.
-func (s *SmartContract) Register(ctx contractapi.TransactionContextInterface, id string, status string) error {
+func (s *SmartContract) Register(ctx contractapi.TransactionContextInterface, id string, status string, key string) error {
 	exists, err := s.exists(ctx, id)
 	if err != nil {
 		return err
@@ -53,6 +56,7 @@ func (s *SmartContract) Register(ctx contractapi.TransactionContextInterface, id
 	asset := Asset{
 		ID:     id,
 		Status: status,
+		Key: key,
 	}
 	assetJSON, err := json.Marshal(asset)
 	if err != nil {
@@ -63,7 +67,7 @@ func (s *SmartContract) Register(ctx contractapi.TransactionContextInterface, id
 }
 
 // Auth returns the asset stored in the world state with given id.
-func (s *SmartContract) Auth(ctx contractapi.TransactionContextInterface, id string) (*Asset, error) {
+func (s *SmartContract) Auth(ctx contractapi.TransactionContextInterface, id string, cipher string) (*Asset, error) {
 	assetJSON, err := ctx.GetStub().GetState(id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read from world state: %v", err)
@@ -77,8 +81,38 @@ func (s *SmartContract) Auth(ctx contractapi.TransactionContextInterface, id str
 	if err != nil {
 		return nil, err
 	}
+	var key = []byte(asset.Key)
+	encryptedBytes, err := hex.DecodeString(cipher)
+    if err != nil {
+        return nil, err
+    }
+ 
+    block, err := aes.NewCipher(key)
+    if err != nil {
+        return nil, err
+    }
+ 
+    // Trim any null characters used as padding
+    decrypted := make([]byte, len(encryptedBytes))
+    for bs, be := 0, block.BlockSize(); bs < len(encryptedBytes); bs, be = bs+be, be+be {
+        block.Decrypt(decrypted[bs:be], encryptedBytes[bs:be])
+    }
+    decryptedText := string(decrypted)
 
-	if asset.Status != "Active" {
+
+	// converting json here
+
+	var data map[string]string
+    if err := json.Unmarshal([]byte(decryptedText), &data); err != nil {
+        return nil, err
+    }
+
+	// json convert end
+
+	if(data["id"] != asset.ID){
+		return nil, fmt.Errorf("Invalid device id")
+	}
+	if asset.Status != "active" {
 		return nil, fmt.Errorf("the device %s is blacklisted", id)
 	}
 
