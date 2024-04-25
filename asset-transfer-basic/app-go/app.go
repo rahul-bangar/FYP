@@ -28,6 +28,10 @@ type Device struct {
 	Status string `json:"status"`
 	Key    string `json:"key"`
 }
+type Device_list struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+}
 type User struct {
 	Name     string `json:"username"`
 	Password string `json:"password"`
@@ -37,6 +41,9 @@ type Res_body struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
 }
+
+var result []byte
+var err error
 
 func usr_name() string {
 	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
@@ -140,7 +147,64 @@ func main() {
 	contract.SubmitTransaction("Delete", "D0")
 
 	// Define routes
-	router.POST("/register", func(c *gin.Context) {
+	router.POST("/register", register(contract))
+
+	router.POST("/update", update(contract))
+
+	router.POST("/auth", auth(contract))
+
+	router.POST("/delete", delete(contract))
+
+	router.GET("/getall", GetAll(contract))
+
+	// Run the server
+	if err := router.Run(":3001"); err != nil {
+		log.Fatalf("Failed to run server: %v", err)
+	}
+}
+func populateWallet(wallet *gateway.Wallet) error {
+	log.Println("============ Populating wallet ============")
+	credPath := filepath.Join(
+		"..",
+		"..",
+		"test-network",
+		"organizations",
+		"peerOrganizations",
+		"org1.example.com",
+		"users",
+		"User1@org1.example.com",
+		"msp",
+	)
+
+	certPath := filepath.Join(credPath, "signcerts", "cert.pem")
+	// read the certificate pem
+	cert, err := os.ReadFile(filepath.Clean(certPath))
+	if err != nil {
+		return err
+	}
+
+	keyDir := filepath.Join(credPath, "keystore")
+	// there's a single file in this dir containing the private key
+	files, err := os.ReadDir(keyDir)
+	if err != nil {
+		return err
+	}
+	if len(files) != 1 {
+		return fmt.Errorf("keystore folder should have contain one file")
+	}
+	keyPath := filepath.Join(keyDir, files[0].Name())
+	key, err := os.ReadFile(filepath.Clean(keyPath))
+	if err != nil {
+		return err
+	}
+
+	identity := gateway.NewX509Identity("Org1MSP", string(cert), string(key))
+
+	return wallet.Put("appUser", identity)
+}
+
+func register(contract *gateway.Contract) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		var requestBody struct {
 			Esp32ID string `json:"esp32id"`
 			Status  string `json:"Status"`
@@ -164,9 +228,11 @@ func main() {
 		}
 
 		c.JSON(200, gin.H{"message": "Device registered"})
-	})
+	}
+}
 
-	router.POST("/update", func(c *gin.Context) {
+func update(contract *gateway.Contract) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		var requestBody struct {
 			Esp32ID string `json:"esp32id"`
 			Status  string `json:"Status"`
@@ -184,9 +250,11 @@ func main() {
 		}
 
 		c.JSON(200, gin.H{"message": "Device status updated"})
-	})
+	}
+}
 
-	router.POST("/auth", func(c *gin.Context) {
+func auth(contract *gateway.Contract) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		// Load .env file
 		er := godotenv.Load(".env")
 		if er != nil {
@@ -317,9 +385,11 @@ func main() {
 		}
 
 		c.JSON(res.StatusCode, gin.H{"error": "Some error occurred"})
-	})
+	}
+}
 
-	router.POST("/delete", func(c *gin.Context) {
+func delete(contract *gateway.Contract) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		var requestBody struct {
 			Esp32ID string `json:"esp32id"`
 		}
@@ -336,15 +406,17 @@ func main() {
 		}
 
 		c.JSON(200, gin.H{"message": "Device deleted"})
-	})
+	}
+}
 
-	router.GET("/getall", func(c *gin.Context) {
+func GetAll(contract *gateway.Contract) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		result, err = contract.EvaluateTransaction("GetAll")
 		if err != nil {
 			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to submit transaction: %s", err)})
 			return
 		}
-		var devices []Device // Assuming Device is the struct type representing a device
+		var devices []Device_list
 		if result == nil {
 			c.JSON(200, gin.H{"devices": "No devices registered"})
 			return
@@ -354,50 +426,5 @@ func main() {
 			return
 		}
 		c.JSON(200, gin.H{"devices": devices})
-	})
-
-	// Run the server
-	if err := router.Run(":3001"); err != nil {
-		log.Fatalf("Failed to run server: %v", err)
 	}
-}
-func populateWallet(wallet *gateway.Wallet) error {
-	log.Println("============ Populating wallet ============")
-	credPath := filepath.Join(
-		"..",
-		"..",
-		"test-network",
-		"organizations",
-		"peerOrganizations",
-		"org1.example.com",
-		"users",
-		"User1@org1.example.com",
-		"msp",
-	)
-
-	certPath := filepath.Join(credPath, "signcerts", "cert.pem")
-	// read the certificate pem
-	cert, err := os.ReadFile(filepath.Clean(certPath))
-	if err != nil {
-		return err
-	}
-
-	keyDir := filepath.Join(credPath, "keystore")
-	// there's a single file in this dir containing the private key
-	files, err := os.ReadDir(keyDir)
-	if err != nil {
-		return err
-	}
-	if len(files) != 1 {
-		return fmt.Errorf("keystore folder should have contain one file")
-	}
-	keyPath := filepath.Join(keyDir, files[0].Name())
-	key, err := os.ReadFile(filepath.Clean(keyPath))
-	if err != nil {
-		return err
-	}
-
-	identity := gateway.NewX509Identity("Org1MSP", string(cert), string(key))
-
-	return wallet.Put("appUser", identity)
 }
